@@ -1,0 +1,32 @@
+{
+  "name": "@tender-os/schemas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./server": {
+      "types": "./src/server.ts",
+      "default": "./src/server.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --config ../../eslint.config.js --max-warnings=0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tender-os/constants": "workspace:*",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3",
+    "vitest": "2.1.4"
+  }
+}

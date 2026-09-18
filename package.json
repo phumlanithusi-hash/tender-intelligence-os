@@ -1,0 +1,40 @@
+{
+  "name": "tender-intelligence-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tender Intelligence OS — procurement intelligence and bid automation platform (Phase 1: project foundation)",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @tender-os/web dev",
+    "dev:api": "pnpm --filter @tender-os/api dev",
+    "lint": "pnpm -r --if-present run lint",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "build": "pnpm -r --if-present run build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "ai:smoke": "pnpm --filter @tender-os/api ai:smoke",
+    "ai:qualification:smoke": "pnpm --filter @tender-os/api ai:qualification:smoke",
+    "ai:embedding:smoke": "pnpm --filter @tender-os/api ai:embedding:smoke",
+    "ai:proposal:smoke": "pnpm --filter @tender-os/api ai:proposal:smoke"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.13.0",
+    "@playwright/test": "1.56.0",
+    "eslint": "9.13.0",
+    "eslint-plugin-react-hooks": "5.0.0",
+    "eslint-plugin-react-refresh": "0.4.14",
+    "globals": "15.11.0",
+    "prettier": "3.3.3",
+    "typescript": "5.6.3",
+    "typescript-eslint": "8.11.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

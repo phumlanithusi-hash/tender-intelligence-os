@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "shared/*"
+  - "agents/*"
+  - "scrapers/*"
+  - "workers/*"
+  - "database"

@@ -1,0 +1,35 @@
+{
+  "ET-100001": {
+    "externalId": "ET-100001",
+    "detailUrl": "https://www.etenders.gov.za/Home/opportunity?id=100001",
+    "title": "Appointment of a service provider for the refurbishment of office buildings in Pretoria",
+    "description": "The Department of Public Works and Infrastructure invites suitably qualified service providers to refurbish office buildings in the Pretoria CBD, including electrical, mechanical and civil works.",
+    "organisation": "Department of Public Works and Infrastructure",
+    "tenderNumber": "DPWI/2026/0091",
+    "advertisedText": "1 September 2026",
+    "closingDateText": "30 September 2026",
+    "closingTimeText": "11:00",
+    "province": "Gauteng",
+    "briefingText": null,
+    "documents": [
+      { "url": "https://www.etenders.gov.za/Home/documents/download?id=100001-1", "label": "DPWI-2026-0091 Bid Document.pdf" },
+      { "url": "https://www.etenders.gov.za/Home/documents/download?id=100001-2", "label": "SBD Forms.pdf" }
+    ]
+  },
+  "ET-100002": {
+    "externalId": "ET-100002",
+    "detailUrl": "https://www.etenders.gov.za/Home/opportunity?id=100002",
+    "title": "Supply, delivery and installation of network infrastructure equipment",
+    "description": "SITA requires a service provider to supply, deliver and install core and edge network infrastructure equipment across multiple government sites.",
+    "organisation": "State Information Technology Agency (SITA)",
+    "tenderNumber": "SITA/2026/RFP-014",
+    "advertisedText": "3 September 2026",
+    "closingDateText": "5 October 2026",
+    "closingTimeText": "12:00",
+    "province": "National",
+    "briefingText": "A compulsory virtual briefing session will be held on 15 September 2026 at 10:00.",
+    "documents": [
+      { "url": "https://www.etenders.gov.za/Home/documents/download?id=100002-1", "label": "RFP-014 Terms of Reference.pdf" }
+    ]
+  }
+}

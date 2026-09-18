@@ -1,0 +1,23 @@
+{
+  "name": "@tender-os/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "migrate": "node scripts/migrate.mjs",
+    "seed": "node scripts/seed.mjs",
+    "reset-test-db": "node scripts/reset.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --config ../eslint.config.js --max-warnings=0",
+    "test": "node scripts/run-tests.mjs"
+  },
+  "dependencies": {
+    "pg": "8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.9",
+    "@types/pg": "8.11.10",
+    "typescript": "5.6.3",
+    "vitest": "2.1.4"
+  }
+}
