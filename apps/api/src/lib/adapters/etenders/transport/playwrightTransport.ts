@@ -30,14 +30,14 @@ import type { EtendersDiscoveryParams, EtendersTransport, RawDetailPage, RawDocu
  */
 export interface PlaywrightTransportConfig {
   baseUrl: string
-  executablePath: string
+  executablePath?: string
   /** Per-navigation timeout, ms. */
   navigationTimeoutMs: number
 }
 
 export const DEFAULT_PLAYWRIGHT_TRANSPORT_CONFIG: PlaywrightTransportConfig = {
   baseUrl: 'https://www.etenders.gov.za',
-  executablePath: '/opt/pw-browsers/chromium',
+  executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
   navigationTimeoutMs: 20_000,
 }
 
