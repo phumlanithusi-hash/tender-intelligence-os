@@ -20,7 +20,15 @@ export class ApiError extends Error {
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const baseUrl = clientEnv?.VITE_API_BASE_URL ?? 'http://localhost:4000'
   const headers = new Headers(init.headers)
-  headers.set('Content-Type', 'application/json')
+  // Only claim a JSON body when one is actually being sent — Fastify's
+  // default JSON body parser rejects an empty body outright when
+  // Content-Type says application/json, which is exactly what every
+  // bodyless action (enable/disable/pause/resume/health-check) was
+  // hitting: a real 400 from the server, not a client-side bug someone
+  // could work around by retrying.
+  if (init.body !== undefined) {
+    headers.set('Content-Type', 'application/json')
+  }
 
   if (supabase) {
     const { data } = await supabase.auth.getSession()
