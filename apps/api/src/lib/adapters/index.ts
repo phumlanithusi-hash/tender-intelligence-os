@@ -16,7 +16,9 @@ import { registerAdapter } from './registry.js'
 import { createEtendersAdapter } from './etenders/adapter.js'
 import { createEasyTendersAdapter } from './easytenders/adapter.js'
 import { createTenderBulletinsAdapter } from './tenderbulletins/adapter.js'
+import { createJoburgAdapter } from './joburg/adapter.js'
 
 registerAdapter(createEtendersAdapter())
 registerAdapter(createEasyTendersAdapter())
 registerAdapter(createTenderBulletinsAdapter())
+registerAdapter(createJoburgAdapter())

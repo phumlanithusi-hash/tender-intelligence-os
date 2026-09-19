@@ -113,3 +113,20 @@ set adapter_key = 'tenderbulletins',
     adapter_state = 'CONFIGURED',
     notes = 'Third-party aggregator. Discovery source only. Adapter implemented — headless-Chromium discovery against the public /search listing ONLY (no detail-page or document fetch: full records sit behind a login wall this project does not automate past). Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment. Run `pnpm --filter api tenderbulletins:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
 where name = 'TenderBulletins';
+
+-- A real adapter now also exists for the City of Johannesburg
+-- (apps/api/src/lib/adapters/joburg/), registered under the key
+-- 'joburg'. Unlike the discovery-only aggregators above, this is a
+-- PRIMARY issuing-authority source with a real (if deeply-nested and
+-- year-specific) live "Current Bid Proposals" listing page that
+-- carries the full record — reference number, description, closing
+-- date, and every document link — in one page, with no separate
+-- detail page to fetch. Same CONFIGURED-not-ACTIVE rule: run `pnpm
+-- --filter api joburg:smoke` from an environment with real network
+-- access to joburg.org.za, then enable via the Source Registry once
+-- it succeeds.
+update tender_sources
+set adapter_key = 'joburg',
+    adapter_state = 'CONFIGURED',
+    notes = 'Metropolitan municipality; issuing authority for its own procurement. Adapter implemented — headless-Chromium discovery against the live "Current Bid Proposals" listing table (reference number, description, closing date, and every document link all come from this one page — no separate detail page exists on this source). The listing URL is year-specific (2026-Tenders/2026-Bid-Proposals.aspx) and will need updating when the City publishes next year''s page. Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment. Run `pnpm --filter api joburg:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
+where name = 'City of Johannesburg';

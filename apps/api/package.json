@@ -16,6 +16,8 @@
     "easytenders:smoke": "tsx src/scripts/easytendersSmoke.ts",
     "tenderbulletins:scan": "tsx src/scripts/tenderbulletinsScan.ts",
     "tenderbulletins:smoke": "tsx src/scripts/tenderbulletinsSmoke.ts",
+    "joburg:scan": "tsx src/scripts/joburgScan.ts",
+    "joburg:smoke": "tsx src/scripts/joburgSmoke.ts",
     "easytenders:inspect": "tsx src/scripts/easytendersInspect.ts",
     "easytenders:inspect-detail": "tsx src/scripts/easytendersInspectDetail.ts",
     "tenderbulletins:inspect": "tsx src/scripts/tenderbulletinsInspect.ts",

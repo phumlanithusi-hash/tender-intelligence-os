@@ -5,6 +5,7 @@ import { DEFAULT_ETENDERS_RATE_LIMIT, sleep, type EtendersRateLimitConfig } from
 import { isAllowedDocumentUrl as isUrlWithinHostAllowlist, ETENDERS_ALLOWED_HOSTS } from '../adapters/etenders/allowlist.js'
 import { EASYTENDERS_ALLOWED_HOSTS } from '../adapters/easytenders/allowlist.js'
 import { TENDERBULLETINS_ALLOWED_HOSTS } from '../adapters/tenderbulletins/allowlist.js'
+import { JOBURG_ALLOWED_HOSTS } from '../adapters/joburg/allowlist.js'
 import { logger } from '../logger.js'
 import { computeContentHash } from './contentHash.js'
 import { diffTenderFacts, buildImpactAssessment, type TenderComparableFacts } from '../surveillance/diffEngine.js'
@@ -30,6 +31,7 @@ const ALL_KNOWN_ADAPTER_DOCUMENT_HOSTS: readonly string[] = [
   ...ETENDERS_ALLOWED_HOSTS,
   ...EASYTENDERS_ALLOWED_HOSTS,
   ...TENDERBULLETINS_ALLOWED_HOSTS,
+  ...JOBURG_ALLOWED_HOSTS,
 ]
 
 function isAllowedDocumentUrl(url: string): boolean {
