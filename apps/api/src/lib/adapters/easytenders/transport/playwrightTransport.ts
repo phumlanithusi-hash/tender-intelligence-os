@@ -100,27 +100,57 @@ async function extractListingRows(page: Page): Promise<RawListingRow[]> {
  * page's fields — confirmed against one real page; see this file's
  * module comment.
  *
- * `field` MUST be an arrow function assigned to a const, not a nested
- * `function field(...) {}` declaration — a real live run found that a
- * nested function declaration inside `page.evaluate(() => {...})`
- * gets wrapped by this project's esbuild/tsx toolchain with an
- * injected `__name(...)` helper call for name-preservation, and
- * Playwright serializes only the function's own source text into the
- * browser's isolated realm, where `__name` was never defined — every
- * call failed with `ReferenceError: __name is not defined` (visible
- * directly in `tender_source_errors` after a real scan). eTenders'
- * own transport already used arrow-function consts inside its
- * `page.evaluate` callbacks (see its `const text = (selector) => ...`)
- * and never hit this failure — this file just hadn't matched that
- * pattern consistently.
+ * IMPORTANT: nothing inside the `page.evaluate(...)` callback below
+ * may be a NAMED function or a `const`/`let` bound to a function
+ * value (an arrow function assigned to a const still counts — a real
+ * live run confirmed the `__name` failure persisted even after
+ * changing a `function field(...) {}` declaration to `const field =
+ * (label) => {...}`). This project's tsx/esbuild toolchain wraps every
+ * named function binding with an injected `__name(...)` helper call
+ * for name-preservation, but Playwright serializes only the callback's
+ * own source text into the browser's isolated realm, where `__name`
+ * was never defined — every call failed with `ReferenceError: __name
+ * is not defined` (visible directly in `tender_source_errors`).
+ * ONLY a truly anonymous inline callback passed straight into a
+ * method call (e.g. `.map((a) => ({...}))`, never stored in a named
+ * variable) escapes this. To extract several labelled fields without
+ * a named helper, the label lists are computed in plain Node.js scope
+ * (never serialized, so naming there is irrelevant) and passed in as
+ * `page.evaluate`'s second argument; the callback then only uses a
+ * plain `for` loop over that data, never a nested function of its own.
+ * (eTenders' own transport has the identical `const text = (selector)
+ * => ...` pattern in its own `page.evaluate` callback and almost
+ * certainly has this same bug — flagged separately, not fixed here.)
  */
+const DETAIL_FIELD_LABELS: Record<string, readonly string[]> = {
+  organisation: ['Department', 'Organisation', 'Organization'],
+  // Not confirmed against a real detail page yet (no dedicated
+  // "Category:"/"Province:" label was found on the one page checked)
+  // — left null rather than guessed if absent, per this project's
+  // non-negotiable rule.
+  category: ['Category'],
+  province: ['Province'],
+  description: ['Bid Description', 'Description'],
+  advertisedText: ['Opening Date', 'Published Date', 'Advertised'],
+  closingDateText: ['Closing Date'],
+  briefingText: ['Briefing Session', 'Briefing'],
+}
+
 async function extractDetailPage(page: Page): Promise<Omit<RawDetailPage, 'slug' | 'detailUrl'>> {
-  return page.evaluate(() => {
+  const extracted = await page.evaluate((labelsByField: Record<string, readonly string[]>) => {
     const bodyText = document.body.innerText
-    const field = (label: string): string | null => {
-      const re = new RegExp(`${label}\\s*:?\\s*([^\\n]+)`, 'i')
-      const match = bodyText.match(re)
-      return match ? match[1]!.trim() : null
+    const fields: Record<string, string | null> = {}
+    for (const key in labelsByField) {
+      let value: string | null = null
+      for (const label of labelsByField[key]!) {
+        const re = new RegExp(`${label}\\s*:?\\s*([^\\n]+)`, 'i')
+        const match = bodyText.match(re)
+        if (match) {
+          value = match[1]!.trim()
+          break
+        }
+      }
+      fields[key] = value
     }
 
     const rawH1 = document.querySelector('h1')?.textContent?.trim() ?? null
@@ -146,23 +176,21 @@ async function extractDetailPage(page: Page): Promise<Omit<RawDetailPage, 'slug'
       label: a.textContent?.trim() ?? null,
     }))
 
-    return {
-      title,
-      tenderNumber,
-      organisation: field('Department') ?? field('Organisation') ?? field('Organization'),
-      // Not confirmed against a real detail page yet (no dedicated
-      // "Category:"/"Province:" label was found on the one page
-      // checked) — left null rather than guessed, per this project's
-      // non-negotiable rule.
-      category: field('Category'),
-      province: field('Province'),
-      description: field('Bid Description') ?? field('Description'),
-      advertisedText: field('Opening Date') ?? field('Published Date') ?? field('Advertised'),
-      closingDateText: field('Closing Date'),
-      briefingText: field('Briefing Session') ?? field('Briefing'),
-      documents: documents as RawDocumentLink[],
-    }
-  })
+    return { title, tenderNumber, fields, documents }
+  }, DETAIL_FIELD_LABELS)
+
+  return {
+    title: extracted.title,
+    tenderNumber: extracted.tenderNumber,
+    organisation: extracted.fields.organisation ?? null,
+    category: extracted.fields.category ?? null,
+    province: extracted.fields.province ?? null,
+    description: extracted.fields.description ?? null,
+    advertisedText: extracted.fields.advertisedText ?? null,
+    closingDateText: extracted.fields.closingDateText ?? null,
+    briefingText: extracted.fields.briefingText ?? null,
+    documents: extracted.documents as RawDocumentLink[],
+  }
 }
 
 export function createPlaywrightTransport(
