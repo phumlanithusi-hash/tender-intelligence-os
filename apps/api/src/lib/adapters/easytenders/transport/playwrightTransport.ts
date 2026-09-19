@@ -212,6 +212,19 @@ export function createPlaywrightTransport(
       return withBrowser(config, async (page) => {
         const target = resolveAndAllowlist(detailUrl, config.baseUrl)
         await page.goto(target, { waitUntil: 'domcontentloaded' })
+        // A real live run found `documentsDiscovered: 0` across 500
+        // real tenders despite a diagnostic script (which added a
+        // fixed wait after navigation) confirming a real detail page
+        // does have a document link — the "Documents" tab's content
+        // renders asynchronously after `domcontentloaded` fires, so
+        // extracting immediately raced it and always lost. This waits
+        // for an actual document link to appear (bounded, so a tender
+        // that genuinely has none doesn't stall the whole scan).
+        await page
+          .waitForSelector('a[href*="documents.easytenders.co.za"], a[href$=".pdf"], a[href$=".doc"], a[href$=".docx"]', {
+            timeout: 5_000,
+          })
+          .catch(() => undefined)
         const extracted = await extractDetailPage(page)
         return { slug, detailUrl: target, ...extracted }
       })
