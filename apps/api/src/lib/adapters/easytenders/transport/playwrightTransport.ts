@@ -95,11 +95,29 @@ async function extractListingRows(page: Page): Promise<RawListingRow[]> {
   })
 }
 
-/** Text-label extraction (not CSS-class selectors) for the detail page's fields — confirmed against one real page; see this file's module comment. */
+/**
+ * Text-label extraction (not CSS-class selectors) for the detail
+ * page's fields — confirmed against one real page; see this file's
+ * module comment.
+ *
+ * `field` MUST be an arrow function assigned to a const, not a nested
+ * `function field(...) {}` declaration — a real live run found that a
+ * nested function declaration inside `page.evaluate(() => {...})`
+ * gets wrapped by this project's esbuild/tsx toolchain with an
+ * injected `__name(...)` helper call for name-preservation, and
+ * Playwright serializes only the function's own source text into the
+ * browser's isolated realm, where `__name` was never defined — every
+ * call failed with `ReferenceError: __name is not defined` (visible
+ * directly in `tender_source_errors` after a real scan). eTenders'
+ * own transport already used arrow-function consts inside its
+ * `page.evaluate` callbacks (see its `const text = (selector) => ...`)
+ * and never hit this failure — this file just hadn't matched that
+ * pattern consistently.
+ */
 async function extractDetailPage(page: Page): Promise<Omit<RawDetailPage, 'slug' | 'detailUrl'>> {
   return page.evaluate(() => {
     const bodyText = document.body.innerText
-    function field(label: string): string | null {
+    const field = (label: string): string | null => {
       const re = new RegExp(`${label}\\s*:?\\s*([^\\n]+)`, 'i')
       const match = bodyText.match(re)
       return match ? match[1]!.trim() : null
