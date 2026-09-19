@@ -12,12 +12,21 @@ import type { RawListingRow, TenderBulletinsTransport } from '../types.js'
  * types.ts module comment for the research finding behind that
  * decision).
  *
- * Not yet run against the live site with a real browser (this sandbox
- * has no network access to tenderbulletin.co.za). The extraction below
- * anchors on the one DOM detail confirmed by direct research — each
- * tender's "Save" link (`href*="intent=save"`) — rather than guessing
- * card class names, since that's the most stable thing to build on
- * without having actually rendered the page.
+ * REVISED after a real first live run found the initial best-effort
+ * extraction (walking up from each "Save" link and regexing the
+ * flattened container text for an uppercase-token id) missed 6 of 10
+ * real rows, because the DOM glues the reference text directly to a
+ * following status word with no whitespace (e.g.
+ * "E2232GXMPTUTPublish"), which a plain \b-bounded regex cannot see
+ * past. A diagnostic run against the live site
+ * (tenderbulletinsInspect.ts) found the real, precise structure
+ * instead:
+ *
+ *   article.tb-tender-card                        (one per opportunity)
+ *     .tb-tender-ref                                <- the ref, verbatim (see types.ts)
+ *     h2.card-title                                 <- title
+ *     .tb-tender-closing__date                      <- ISO closing date, e.g. "2031-12-31"
+ *     p.small.text-secondary  ("A · B · C")         <- meta line; segment A is used as `organisation` (see types.ts — the remaining segments' meaning isn't stable across rows, so they're left unused rather than guessed)
  */
 export interface PlaywrightTransportConfig {
   baseUrl: string
@@ -57,28 +66,17 @@ async function withBrowser<T>(config: PlaywrightTransportConfig, fn: (page: Page
 
 async function extractListingRows(page: Page): Promise<RawListingRow[]> {
   return page.evaluate(() => {
-    const saveLinks = Array.from(document.querySelectorAll('a[href*="intent=save"]'))
+    const cards = Array.from(document.querySelectorAll('article.tb-tender-card'))
     const rows: Array<{ tenderId: string | null; organisation: string | null; description: string | null; closingDateText: string | null }> = []
 
-    for (const link of saveLinks) {
-      let container: Element = link
-      for (let i = 0; i < 5 && container.parentElement; i += 1) {
-        container = container.parentElement
-        if ((container.textContent?.trim().length ?? 0) > 40) break
-      }
-      const text = container.textContent?.replace(/\s+/g, ' ').trim() ?? null
-      // The source's own tender id, as shown in the listing (e.g.
-      // "E2232GXMPTUT") — an uppercase alphanumeric token, distinct
-      // from the internal UUID in the save link's own `tender_id=`
-      // query param (that UUID belongs to TenderBulletins' own
-      // database, not the source tender itself).
-      const idMatch = text?.match(/\b[A-Z][A-Z0-9]{5,23}\b/)
-      rows.push({
-        tenderId: idMatch ? idMatch[0] : null,
-        organisation: null,
-        description: text,
-        closingDateText: text,
-      })
+    for (const card of cards) {
+      const tenderId = card.querySelector('.tb-tender-ref')?.textContent?.trim() || null
+      const description = card.querySelector('h2.card-title')?.textContent?.replace(/\s+/g, ' ').trim() || null
+      const closingDateText = card.querySelector('.tb-tender-closing__date')?.textContent?.trim() || null
+      const metaLine = card.querySelector('p.small.text-secondary')?.textContent?.replace(/\s+/g, ' ').trim() || null
+      const organisation = metaLine ? metaLine.split('·')[0]!.trim() || null : null
+
+      rows.push({ tenderId, organisation, description, closingDateText })
     }
     return rows
   })
@@ -92,7 +90,7 @@ export function createPlaywrightTransport(
       return withBrowser(config, async (page) => {
         const target = resolveAndAllowlist('/search', config.baseUrl)
         await page.goto(target, { waitUntil: 'domcontentloaded' })
-        await page.waitForSelector('a[href*="intent=save"]', { timeout: config.navigationTimeoutMs }).catch(() => undefined)
+        await page.waitForSelector('article.tb-tender-card', { timeout: config.navigationTimeoutMs }).catch(() => undefined)
         return extractListingRows(page)
       })
     },

@@ -9,22 +9,32 @@ import type { EasyTendersDiscoveryParams, EasyTendersTransport, RawDetailPage, R
 /**
  * REAL transport against the public EasyTenders listing
  * (https://easytenders.co.za/tenders) and its per-tender detail pages.
- * Investigated directly (this build's own research step, not a guess
- * from documentation) before writing this file: the listing is plain
- * server-rendered HTML with real `<a href="/tenders/...">` links —
- * no hidden JSON endpoint like eTenders needed. That said, this
- * module has NOT yet been run against the live site with a real
- * browser (this sandbox has no network access to easytenders.co.za
- * either) — the exact container/selector choices below are a
- * documented best-effort guess from a text-only fetch of the page,
- * the same honest caveat the original eTenders transport carried
- * before its own first live run found a real mismatch. Discovery is
- * deliberately kept minimal (just the detail URL, plus whatever
- * secondary text falls out easily) precisely so a wrong guess there
- * degrades to "some fields null" rather than "no tenders found at
- * all" — the detail-page fetch (text-label based, not CSS-class
- * based) is where the real fields come from and is more robust to a
- * DOM this adapter hasn't actually seen.
+ *
+ * REVISED after a real first live run (round 1) found the initial
+ * best-effort listing selector (`a[href^="/tenders/"]`) matched only
+ * nav/sort/pagination links, never an actual card — the real listing
+ * markup was confirmed directly via a diagnostic script
+ * (easytendersInspect.ts) against the live site:
+ *
+ *   div.tender-listing
+ *     div.card.tender                      (one per opportunity)
+ *       div.card-body
+ *         a.text-dark[href][data-id]        <- the real detail link
+ *           div.pl-1...
+ *             div.font-weight-bold.text-primary   <- organisation
+ *             div.pt-1.text-dark.font-size-14     <- description
+ *             div.closing-date                    <- "Closing <weekday>, D Mon YYYY H:MMAM/PM"
+ *
+ * The detail page's field extraction (extractDetailPage) was likewise
+ * confirmed against one real detail page (easytendersInspectDetail.ts)
+ * — its labels are "Department:", "Bid Description:", "Opening Date:",
+ * "Closing Date:", "Briefing Session:", and the tender's own reference
+ * number appears as "Request for Bid(Open-Tender): <ref>" (or the
+ * equivalent "Request for Quotation(...)"/"Request for Proposal(...)"
+ * phrasing) rather than a "Reference Number:" label — with a fallback
+ * to the trailing "| <ref>" segment of the page's own <h1> when that
+ * line isn't present at all, since both were observed on the one real
+ * page checked so far.
  */
 export interface PlaywrightTransportConfig {
   baseUrl: string
@@ -64,44 +74,28 @@ async function withBrowser<T>(config: PlaywrightTransportConfig, fn: (page: Page
 
 async function extractListingRows(page: Page): Promise<RawListingRow[]> {
   return page.evaluate(() => {
-    const anchors = Array.from(document.querySelectorAll('a[href^="/tenders/"]')) as HTMLAnchorElement[]
-    const seen = new Set<string>()
+    const cards = Array.from(document.querySelectorAll('.tender-listing .card.tender'))
     const rows: Array<{ slug: string | null; detailUrl: string | null; organisation: string | null; description: string | null; closingDateText: string | null }> = []
 
-    for (const anchor of anchors) {
-      const href = anchor.getAttribute('href')
-      if (!href || href === '/tenders' || seen.has(href)) continue
-      seen.add(href)
+    for (const card of cards) {
+      const link = card.querySelector('a.text-dark[href]')
+      const href = link?.getAttribute('href') ?? null
+      const slug = href ? href.split('/').filter(Boolean).pop() ?? null : null
+      const organisation = card.querySelector('.font-weight-bold.text-primary')?.textContent?.trim() ?? null
+      const description = card.querySelector('.pt-1.text-dark.font-size-14')?.textContent?.trim() ?? null
+      // The site's own text is "Closing <weekday>, D Mon YYYY H:MMAM/PM"
+      // — strip the leading "Closing" label so the shared date parser
+      // (which expects the date to start the string) can read it.
+      const closingRaw = card.querySelector('.closing-date')?.textContent?.replace(/\s+/g, ' ').trim() ?? null
+      const closingDateText = closingRaw ? closingRaw.replace(/^Closing\s*/i, '') : null
 
-      // Walk up to the nearest reasonably-sized ancestor so the whole
-      // card's text (org, description, closing date) comes along with
-      // the link, rather than just the anchor's own (often short)
-      // link text.
-      let container: Element = anchor
-      for (let i = 0; i < 4 && container.parentElement; i += 1) {
-        container = container.parentElement
-        if ((container.textContent?.trim().length ?? 0) > 40) break
-      }
-
-      const text = container.textContent?.replace(/\s+/g, ' ').trim() ?? null
-      const slug = href.split('/').filter(Boolean).pop() ?? null
-
-      rows.push({
-        slug,
-        detailUrl: href,
-        // Deliberately left null here rather than guessed from the
-        // card's combined text — normalise.ts backfills it reliably
-        // from the detail page instead.
-        organisation: null,
-        description: text,
-        closingDateText: text,
-      })
+      rows.push({ slug, detailUrl: href, organisation, description, closingDateText })
     }
     return rows
   })
 }
 
-/** Text-label extraction (not CSS-class selectors) for the detail page's fields — see this file's module comment for why. */
+/** Text-label extraction (not CSS-class selectors) for the detail page's fields — confirmed against one real page; see this file's module comment. */
 async function extractDetailPage(page: Page): Promise<Omit<RawDetailPage, 'slug' | 'detailUrl'>> {
   return page.evaluate(() => {
     const bodyText = document.body.innerText
@@ -110,7 +104,23 @@ async function extractDetailPage(page: Page): Promise<Omit<RawDetailPage, 'slug'
       const match = bodyText.match(re)
       return match ? match[1]!.trim() : null
     }
-    const title = document.querySelector('h1')?.textContent?.trim() ?? null
+
+    const rawH1 = document.querySelector('h1')?.textContent?.trim() ?? null
+    let title = rawH1
+    let tenderNumberFromH1: string | null = null
+    if (rawH1 && rawH1.includes('|')) {
+      const parts = rawH1.split('|').map((p) => p.trim())
+      tenderNumberFromH1 = parts[parts.length - 1] || null
+      title = parts.slice(0, -1).join(' | ').trim() || rawH1
+    }
+
+    // The tender's own reference appears as "Request for
+    // Bid(Open-Tender): <ref>" (or Quotation/Proposal) rather than
+    // under a "Reference Number:" label — falls back to the <h1>'s
+    // trailing "| <ref>" segment when that line is absent.
+    const requestForMatch = bodyText.match(/Request for (?:Bid|Quotation|Proposal)s?\s*\([^)]*\)\s*:\s*([^\n]+)/i)
+    const tenderNumber = (requestForMatch ? requestForMatch[1]!.trim() : null) ?? tenderNumberFromH1
+
     const documents = Array.from(
       document.querySelectorAll('a[href*="documents.easytenders.co.za"], a[href$=".pdf"], a[href$=".doc"], a[href$=".docx"]'),
     ).map((a) => ({
@@ -120,12 +130,16 @@ async function extractDetailPage(page: Page): Promise<Omit<RawDetailPage, 'slug'
 
     return {
       title,
-      tenderNumber: field('Reference Number') ?? field('Tender Number'),
+      tenderNumber,
       organisation: field('Department') ?? field('Organisation') ?? field('Organization'),
+      // Not confirmed against a real detail page yet (no dedicated
+      // "Category:"/"Province:" label was found on the one page
+      // checked) — left null rather than guessed, per this project's
+      // non-negotiable rule.
       category: field('Category'),
       province: field('Province'),
       description: field('Bid Description') ?? field('Description'),
-      advertisedText: field('Published Date') ?? field('Advertised'),
+      advertisedText: field('Opening Date') ?? field('Published Date') ?? field('Advertised'),
       closingDateText: field('Closing Date'),
       briefingText: field('Briefing Session') ?? field('Briefing'),
       documents: documents as RawDocumentLink[],
@@ -143,7 +157,7 @@ export function createPlaywrightTransport(
         if (params.page > 1) url.searchParams.set('page', String(params.page))
         const target = resolveAndAllowlist(url.toString(), config.baseUrl)
         await page.goto(target, { waitUntil: 'domcontentloaded' })
-        await page.waitForSelector('a[href^="/tenders/"]', { timeout: config.navigationTimeoutMs }).catch(() => undefined)
+        await page.waitForSelector('.tender-listing .card.tender', { timeout: config.navigationTimeoutMs }).catch(() => undefined)
         return extractListingRows(page)
       })
     },
