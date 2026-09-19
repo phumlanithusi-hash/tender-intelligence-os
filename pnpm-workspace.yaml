@@ -5,3 +5,5 @@ packages:
   - "scrapers/*"
   - "workers/*"
   - "database"
+allowBuilds:
+  esbuild: false

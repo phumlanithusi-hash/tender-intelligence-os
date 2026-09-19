@@ -84,3 +84,32 @@ set adapter_key = 'etenders',
     adapter_state = 'CONFIGURED',
     notes = 'South Africa''s central government e-procurement portal. Adapter implemented (Phase 5) — headless-Chromium discovery against the public opportunities listing. Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment (no outbound network access here). Run `pnpm --filter api etenders:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
 where name = 'eTenders (National Treasury)';
+
+-- A real adapter now also exists for EasyTenders
+-- (apps/api/src/lib/adapters/easytenders/), registered under the key
+-- 'easytenders'. Same CONFIGURED-not-ACTIVE rule as eTenders above:
+-- run `pnpm --filter api easytenders:smoke` from an environment with
+-- real network access to easytenders.co.za, then enable via the
+-- Source Registry once it succeeds.
+update tender_sources
+set adapter_key = 'easytenders',
+    adapter_state = 'CONFIGURED',
+    notes = 'Third-party aggregator. Discovery source only — the original tender document and issuing portal remain authoritative (master spec §4). Adapter implemented — headless-Chromium discovery against the public /tenders listing and per-tender detail pages. Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment. Run `pnpm --filter api easytenders:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
+where name = 'EasyTenders';
+
+-- A real adapter now also exists for TenderBulletins
+-- (apps/api/src/lib/adapters/tenderbulletins/), registered under the
+-- key 'tenderbulletins'. This one is DISCOVERY-ONLY by design — the
+-- site's own document/full-record view sits behind a login wall this
+-- project will not automate past (see that adapter directory's
+-- types.ts module comment) — so fetchDetails/fetchDocuments are
+-- honest, limited stubs, not full implementations. Same
+-- CONFIGURED-not-ACTIVE rule: run `pnpm --filter api
+-- tenderbulletins:smoke` from an environment with real network access
+-- to tenderbulletin.co.za, then enable via the Source Registry once it
+-- succeeds.
+update tender_sources
+set adapter_key = 'tenderbulletins',
+    adapter_state = 'CONFIGURED',
+    notes = 'Third-party aggregator. Discovery source only. Adapter implemented — headless-Chromium discovery against the public /search listing ONLY (no detail-page or document fetch: full records sit behind a login wall this project does not automate past). Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment. Run `pnpm --filter api tenderbulletins:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
+where name = 'TenderBulletins';
