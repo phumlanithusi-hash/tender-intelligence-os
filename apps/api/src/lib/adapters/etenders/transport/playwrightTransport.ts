@@ -53,6 +53,24 @@ export const DEFAULT_PLAYWRIGHT_TRANSPORT_CONFIG: PlaywrightTransportConfig = {
 }
 
 /** Resolves a possibly-relative source URL against the configured base and enforces the document/page domain allow-list before any navigation or fetch (Phase 5 §31/§32) — throws rather than silently skipping, since a resolution failure here means the caller must not proceed to fetch anything. */
+/**
+ * Field/selector lookup for fetchDetailPage, kept in plain Node scope
+ * (never inside the page.evaluate callback itself) so it never gets
+ * caught by tsx/esbuild's __name-wrapping transform. See that
+ * function's comment for the full story.
+ */
+const DETAIL_FIELD_SELECTORS: Record<string, string> = {
+  title: 'h1, .tender-title',
+  description: '.tender-description, .description',
+  organisation: '.organ-of-state, .organisation',
+  tenderNumber: '.tender-number, .reference-number',
+  advertisedText: '.advertised-date',
+  closingDateText: '.closing-date',
+  closingTimeText: '.closing-time',
+  province: '.province',
+  briefingText: '.briefing-info',
+}
+
 export function resolveAndAllowlist(url: string, baseUrl: string): string {
   const absolute = new URL(url, baseUrl).toString()
   if (!isAllowedDocumentUrl(absolute)) {
@@ -210,27 +228,48 @@ export function createPlaywrightTransport(
         const target = resolveAndAllowlist(detailUrl, config.baseUrl)
         await page.goto(target, { waitUntil: 'networkidle' })
 
-        const extracted = await page.evaluate(() => {
-          const text = (selector: string) => document.querySelector(selector)?.textContent?.trim() ?? null
-          const links = Array.from(document.querySelectorAll('a[href*="document"]')).map((a) => ({
+        // Same `__name is not defined` bug class fixed in the
+        // EasyTenders adapter (Phase 5 go-live, see that adapter's
+        // playwrightTransport.ts comment): `tsx`/esbuild's keepNames
+        // transform wraps ANY named function/arrow binding — including
+        // a local `const text = (selector) => ...` — in an
+        // `__name(fn, "name")` call, but only this callback's own
+        // source text is serialized into the page's isolated V8
+        // realm, where that helper was never defined. This was
+        // almost certainly the true root cause of this adapter's
+        // long-standing, silently-swallowed `errorCount: 250` history
+        // (a `page.evaluate` ReferenceError on every single detail
+        // fetch, non-fatal to the record so the scan itself always
+        // reported SUCCESS). Fix: compute the field/selector lookup
+        // OUTSIDE the callback as plain Node-scope data, pass it in
+        // via page.evaluate's second argument, and use only a plain
+        // `for...in` loop (no named binding) inside the callback.
+        const extracted = await page.evaluate((selectors: Record<string, string>) => {
+          const fields: Record<string, string | null> = {}
+          for (const key in selectors) {
+            fields[key] = document.querySelector(selectors[key]!)?.textContent?.trim() ?? null
+          }
+          const documents = Array.from(document.querySelectorAll('a[href*="document"]')).map((a) => ({
             url: a.getAttribute('href'),
             label: a.textContent?.trim() ?? null,
           }))
-          return {
-            title: text('h1, .tender-title'),
-            description: text('.tender-description, .description'),
-            organisation: text('.organ-of-state, .organisation'),
-            tenderNumber: text('.tender-number, .reference-number'),
-            advertisedText: text('.advertised-date'),
-            closingDateText: text('.closing-date'),
-            closingTimeText: text('.closing-time'),
-            province: text('.province'),
-            briefingText: text('.briefing-info'),
-            documents: links as RawDocumentLink[],
-          }
-        })
+          return { fields, documents }
+        }, DETAIL_FIELD_SELECTORS)
 
-        return { externalId, detailUrl: target, ...extracted }
+        return {
+          externalId,
+          detailUrl: target,
+          title: extracted.fields.title ?? null,
+          description: extracted.fields.description ?? null,
+          organisation: extracted.fields.organisation ?? null,
+          tenderNumber: extracted.fields.tenderNumber ?? null,
+          advertisedText: extracted.fields.advertisedText ?? null,
+          closingDateText: extracted.fields.closingDateText ?? null,
+          closingTimeText: extracted.fields.closingTimeText ?? null,
+          province: extracted.fields.province ?? null,
+          briefingText: extracted.fields.briefingText ?? null,
+          documents: extracted.documents as RawDocumentLink[],
+        }
       })
     },
 
