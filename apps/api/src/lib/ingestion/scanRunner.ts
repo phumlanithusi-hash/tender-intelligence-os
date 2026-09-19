@@ -2,12 +2,39 @@ import type { TenderSourceAdapter, TenderDiscovery } from '../adapters/types.js'
 import { matchExistingTender, type DedupeCandidate } from '../adapters/etenders/dedupe.js'
 import { classifyError } from '../adapters/etenders/retry.js'
 import { DEFAULT_ETENDERS_RATE_LIMIT, sleep, type EtendersRateLimitConfig } from '../adapters/etenders/rateLimit.js'
-import { isAllowedDocumentUrl } from '../adapters/etenders/allowlist.js'
+import { isAllowedDocumentUrl as isUrlWithinHostAllowlist, ETENDERS_ALLOWED_HOSTS } from '../adapters/etenders/allowlist.js'
+import { EASYTENDERS_ALLOWED_HOSTS } from '../adapters/easytenders/allowlist.js'
+import { TENDERBULLETINS_ALLOWED_HOSTS } from '../adapters/tenderbulletins/allowlist.js'
 import { logger } from '../logger.js'
 import { computeContentHash } from './contentHash.js'
 import { diffTenderFacts, buildImpactAssessment, type TenderComparableFacts } from '../surveillance/diffEngine.js'
 import type { IngestionStore } from './store.js'
 import type { TenderSourceRecordRow } from '@tender-os/schemas'
+
+// This scan runner is generic across every registered adapter (see
+// the module comment below), but its own "defence in depth" document
+// URL check was previously hardcoded to ONLY eTenders' own allowed
+// hosts (../adapters/etenders/allowlist.js) — meaning it silently
+// dropped every EasyTenders/TenderBulletins document via the `continue`
+// below, with no error raised (each adapter's OWN allow-list check,
+// applied before its documents are ever returned, had already passed
+// them — this generic check was the one place still eTenders-only).
+// Real-world symptom: a live EasyTenders scan showed
+// `documentsDiscovered: 0` and `errorCount: 0` for 500/500 real
+// tenders, even after confirming (via a direct diagnostic script
+// calling the adapter's own fetchDetailPage) that real document links
+// were being found correctly. Fix: merge every registered adapter's
+// own allowed-hosts list here, so this generic safety net recognises
+// a real document URL from ANY adapter, not just eTenders'.
+const ALL_KNOWN_ADAPTER_DOCUMENT_HOSTS: readonly string[] = [
+  ...ETENDERS_ALLOWED_HOSTS,
+  ...EASYTENDERS_ALLOWED_HOSTS,
+  ...TENDERBULLETINS_ALLOWED_HOSTS,
+]
+
+function isAllowedDocumentUrl(url: string): boolean {
+  return isUrlWithinHostAllowlist(url, ALL_KNOWN_ADAPTER_DOCUMENT_HOSTS)
+}
 
 /**
  * The generic ingestion pipeline (Phase 5 §10-§19, §24, §28): given
