@@ -17,8 +17,12 @@ import { createEtendersAdapter } from './etenders/adapter.js'
 import { createEasyTendersAdapter } from './easytenders/adapter.js'
 import { createTenderBulletinsAdapter } from './tenderbulletins/adapter.js'
 import { createJoburgAdapter } from './joburg/adapter.js'
+import { createEskomAdapter } from './eskom/adapter.js'
+import { createCapeTownAdapter } from './capetown/adapter.js'
 
 registerAdapter(createEtendersAdapter())
 registerAdapter(createEasyTendersAdapter())
 registerAdapter(createTenderBulletinsAdapter())
 registerAdapter(createJoburgAdapter())
+registerAdapter(createEskomAdapter())
+registerAdapter(createCapeTownAdapter())

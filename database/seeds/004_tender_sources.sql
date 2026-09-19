@@ -130,3 +130,36 @@ set adapter_key = 'joburg',
     adapter_state = 'CONFIGURED',
     notes = 'Metropolitan municipality; issuing authority for its own procurement. Adapter implemented — headless-Chromium discovery against the live "Current Bid Proposals" listing table (reference number, description, closing date, and every document link all come from this one page — no separate detail page exists on this source). The listing URL is year-specific (2026-Tenders/2026-Bid-Proposals.aspx) and will need updating when the City publishes next year''s page. Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment. Run `pnpm --filter api joburg:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
 where name = 'City of Johannesburg';
+
+-- A real adapter now also exists for Eskom
+-- (apps/api/src/lib/adapters/eskom/), registered under the key
+-- 'eskom'. Eskom's own tender bulletin (a dedicated subdomain,
+-- tenderbulletin.eskom.co.za) is a client-side rendered app — the
+-- listing card itself carries the full record (reference,
+-- description, organisation, location, closing/published dates, and
+-- a single "download all documents" bundle link), so no separate
+-- detail-page fetch is needed. Same CONFIGURED-not-ACTIVE rule: run
+-- `pnpm --filter api eskom:smoke` from an environment with real
+-- network access to tenderbulletin.eskom.co.za, then enable via the
+-- Source Registry once it succeeds.
+update tender_sources
+set adapter_key = 'eskom',
+    adapter_state = 'CONFIGURED',
+    notes = 'State-owned electricity utility; issuing authority for its own procurement. Adapter implemented — the live tender bulletin (tenderbulletin.eskom.co.za, a separate subdomain from the main site) is a client-side app whose listing cards carry the full record plus a single document-bundle download link per tender. Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment. Run `pnpm --filter api eskom:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
+where name = 'Eskom Holdings SOC Ltd';
+
+-- A real adapter now also exists for the City of Cape Town
+-- (apps/api/src/lib/adapters/capetown/), registered under the key
+-- 'capetown'. Discovery-only by design: the public tender listing
+-- itself states that additional detail requires registering and
+-- logging in, so (like TenderBulletins) this adapter never
+-- navigates past that login wall — fetchDocuments always returns
+-- []. Same CONFIGURED-not-ACTIVE rule: run `pnpm --filter api
+-- capetown:smoke` from an environment with real network access to
+-- web1.capetown.gov.za, then enable via the Source Registry once it
+-- succeeds.
+update tender_sources
+set adapter_key = 'capetown',
+    adapter_state = 'CONFIGURED',
+    notes = 'Metropolitan municipality; issuing authority for its own procurement. Adapter implemented — headless-Chromium discovery against the public Procurement Administration Portal tender listing (a classic client-side jQuery DataTable; every tender loads with the initial page and pagination is a pure in-browser redraw with no extra network calls, so this adapter clicks through every page within one browser session). Discovery-only: the listing itself states that further detail requires registering and logging in, and this project does not automate past a source''s own login wall, so no document links are ever surfaced. Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment. Run `pnpm --filter api capetown:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
+where name = 'City of Cape Town';

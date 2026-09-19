@@ -54,7 +54,7 @@ describe('adapter registry (Phase 4 §6)', () => {
     expect(() => registerAdapter(fakeAdapter('dup'))).toThrow()
   })
 
-  it('the production entry point registers exactly eTenders, EasyTenders, TenderBulletins, and City of Johannesburg (the four live sources built so far) — no other adapter yet', async () => {
+  it('the production entry point registers exactly eTenders, EasyTenders, TenderBulletins, City of Johannesburg, Eskom, and City of Cape Town (the six live sources built so far) — no other adapter yet', async () => {
     __resetAdapterRegistryForTests()
     // ES module caches are per-process, not per-test — a second
     // `import('../index.js')` from elsewhere in this file's module
@@ -63,6 +63,6 @@ describe('adapter registry (Phase 4 §6)', () => {
     // file imports '../index.js', so a single plain import here is
     // its first (and only) evaluation in this process.
     await import('../index.js')
-    expect(listRegisteredAdapterKeys().sort()).toEqual(['easytenders', 'etenders', 'joburg', 'tenderbulletins'])
+    expect(listRegisteredAdapterKeys().sort()).toEqual(['capetown', 'easytenders', 'eskom', 'etenders', 'joburg', 'tenderbulletins'])
   })
 })

@@ -6,6 +6,8 @@ import { isAllowedDocumentUrl as isUrlWithinHostAllowlist, ETENDERS_ALLOWED_HOST
 import { EASYTENDERS_ALLOWED_HOSTS } from '../adapters/easytenders/allowlist.js'
 import { TENDERBULLETINS_ALLOWED_HOSTS } from '../adapters/tenderbulletins/allowlist.js'
 import { JOBURG_ALLOWED_HOSTS } from '../adapters/joburg/allowlist.js'
+import { ESKOM_ALLOWED_HOSTS } from '../adapters/eskom/allowlist.js'
+import { CAPETOWN_ALLOWED_HOSTS } from '../adapters/capetown/allowlist.js'
 import { logger } from '../logger.js'
 import { computeContentHash } from './contentHash.js'
 import { diffTenderFacts, buildImpactAssessment, type TenderComparableFacts } from '../surveillance/diffEngine.js'
@@ -32,6 +34,8 @@ const ALL_KNOWN_ADAPTER_DOCUMENT_HOSTS: readonly string[] = [
   ...EASYTENDERS_ALLOWED_HOSTS,
   ...TENDERBULLETINS_ALLOWED_HOSTS,
   ...JOBURG_ALLOWED_HOSTS,
+  ...ESKOM_ALLOWED_HOSTS,
+  ...CAPETOWN_ALLOWED_HOSTS,
 ]
 
 function isAllowedDocumentUrl(url: string): boolean {
