@@ -19,6 +19,8 @@ import { createTenderBulletinsAdapter } from './tenderbulletins/adapter.js'
 import { createJoburgAdapter } from './joburg/adapter.js'
 import { createEskomAdapter } from './eskom/adapter.js'
 import { createCapeTownAdapter } from './capetown/adapter.js'
+import { createTransnetAdapter } from './transnet/adapter.js'
+import { createTenderAlertsAdapter } from './tenderalerts/adapter.js'
 
 registerAdapter(createEtendersAdapter())
 registerAdapter(createEasyTendersAdapter())
@@ -26,3 +28,5 @@ registerAdapter(createTenderBulletinsAdapter())
 registerAdapter(createJoburgAdapter())
 registerAdapter(createEskomAdapter())
 registerAdapter(createCapeTownAdapter())
+registerAdapter(createTransnetAdapter())
+registerAdapter(createTenderAlertsAdapter())

@@ -163,3 +163,42 @@ set adapter_key = 'capetown',
     adapter_state = 'CONFIGURED',
     notes = 'Metropolitan municipality; issuing authority for its own procurement. Adapter implemented — headless-Chromium discovery against the public Procurement Administration Portal tender listing (a classic client-side jQuery DataTable; every tender loads with the initial page and pagination is a pure in-browser redraw with no extra network calls, so this adapter clicks through every page within one browser session). Discovery-only: the listing itself states that further detail requires registering and logging in, and this project does not automate past a source''s own login wall, so no document links are ever surfaced. Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment. Run `pnpm --filter api capetown:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
 where name = 'City of Cape Town';
+
+-- A real adapter now also exists for Transnet SOC Ltd
+-- (apps/api/src/lib/adapters/transnet/), registered under the key
+-- 'transnet'. transnet.net's own "Transnet Tenders" page does not
+-- itself list tenders — it points to a separate real system, the
+-- "Transnet eTender" app (transnetetenders.azurewebsites.net), whose
+-- rendered DataTable turns out to be populated from two real, public,
+-- unauthenticated JSON endpoints (confirmed live via direct in-page
+-- fetch calls). This adapter hits both endpoints directly rather than
+-- scraping the rendered table. It captures every row from both
+-- endpoints verbatim, including non-"Open" statuses such as
+-- "Cancelled" that the source's own "Other Tenders" tab includes —
+-- no status filtering is invented. Same CONFIGURED-not-ACTIVE rule:
+-- run `pnpm --filter api transnet:smoke` from an environment with
+-- real network access to transnetetenders.azurewebsites.net, then
+-- enable via the Source Registry once it succeeds.
+update tender_sources
+set adapter_key = 'transnet',
+    adapter_state = 'CONFIGURED',
+    notes = 'State-owned freight/logistics utility; issuing authority for its own procurement. Adapter implemented — hits the real, public, unauthenticated GetAdvertisedTenders JSON endpoint behind the separate transnetetenders.azurewebsites.net e-Tender app directly (no HTML scraping needed); each tender carries a single document-bundle attachment URL. The sibling GetOtherAdvertisedTendersCached endpoint is deliberately never called: confirmed live to be an 18k+ row historical archive back to 2022 where every row is already Cancelled/Closed/Awarded, not a feed of open opportunities. Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment. Run `pnpm --filter api transnet:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
+where name = 'Transnet SOC Ltd';
+
+-- A real adapter now also exists for TenderAlerts
+-- (apps/api/src/lib/adapters/tenderalerts/), registered under the
+-- key 'tenderalerts'. Discovery-only by design: the public
+-- `/tenders/all` listing itself is genuinely browsable with no
+-- sign-in, but a live check of a real tender's own detail page showed
+-- the exact text "Only subscribers can see details and documents" —
+-- so (like TenderBulletins and City of Cape Town) this adapter never
+-- attempts to cross that subscription wall; fetchDocuments always
+-- returns []. Same CONFIGURED-not-ACTIVE rule: run `pnpm --filter api
+-- tenderalerts:smoke` from an environment with real network access to
+-- tenderalerts.co.za, then enable via the Source Registry once it
+-- succeeds.
+update tender_sources
+set adapter_key = 'tenderalerts',
+    adapter_state = 'CONFIGURED',
+    notes = 'Third-party aggregator. Discovery source only — adapter implemented against the public /tenders/all listing (page-based pagination, ~4083 open tenders at the time of investigation). Detail pages and documents sit behind a subscription wall this adapter does not cross. Left CONFIGURED, not ACTIVE: not yet validated against the live site from this build environment. Run `pnpm --filter api tenderalerts:smoke` from an environment with real network access, then enable via the Source Registry once it succeeds.'
+where name = 'TenderAlerts';

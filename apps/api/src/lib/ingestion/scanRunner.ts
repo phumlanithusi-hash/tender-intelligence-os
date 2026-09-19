@@ -8,6 +8,8 @@ import { TENDERBULLETINS_ALLOWED_HOSTS } from '../adapters/tenderbulletins/allow
 import { JOBURG_ALLOWED_HOSTS } from '../adapters/joburg/allowlist.js'
 import { ESKOM_ALLOWED_HOSTS } from '../adapters/eskom/allowlist.js'
 import { CAPETOWN_ALLOWED_HOSTS } from '../adapters/capetown/allowlist.js'
+import { TRANSNET_ALLOWED_HOSTS } from '../adapters/transnet/allowlist.js'
+import { TENDERALERTS_ALLOWED_HOSTS } from '../adapters/tenderalerts/allowlist.js'
 import { logger } from '../logger.js'
 import { computeContentHash } from './contentHash.js'
 import { diffTenderFacts, buildImpactAssessment, type TenderComparableFacts } from '../surveillance/diffEngine.js'
@@ -36,6 +38,8 @@ const ALL_KNOWN_ADAPTER_DOCUMENT_HOSTS: readonly string[] = [
   ...JOBURG_ALLOWED_HOSTS,
   ...ESKOM_ALLOWED_HOSTS,
   ...CAPETOWN_ALLOWED_HOSTS,
+  ...TRANSNET_ALLOWED_HOSTS,
+  ...TENDERALERTS_ALLOWED_HOSTS,
 ]
 
 function isAllowedDocumentUrl(url: string): boolean {
