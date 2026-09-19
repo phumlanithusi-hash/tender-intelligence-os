@@ -16,10 +16,6 @@ insert into tender_sources (name, base_url, source_type, authority_level, jurisd
   -- Primary / authoritative: national e-procurement + Treasury.
   ('eTenders (National Treasury)', 'https://www.etenders.gov.za', 'OFFICIAL', 'PRIMARY', 'National',
    'South Africa''s central government e-procurement portal. No automated adapter yet — Phase 5.'),
-  ('National Treasury', 'https://www.treasury.gov.za', 'GOVERNMENT', 'PRIMARY', 'National',
-   'Publishes tender-related circulars, instruction notes, and some bid documents directly.'),
-  ('Central Supplier Database (CSD)', 'https://secure.csd.gov.za', 'OFFICIAL', 'PRIMARY', 'National',
-   'Supplier registration and verification system referenced by many tender qualification requirements, not itself a tender listing source.'),
 
   -- Primary / authoritative: example issuing government entities,
   -- municipalities, and SOEs (Phase 4 §5). Each is the issuing
@@ -49,15 +45,8 @@ insert into tender_sources (name, base_url, source_type, authority_level, jurisd
   ('TenderAlerts', 'https://www.tenderalerts.co.za', 'AGGREGATOR', 'DISCOVERY', 'National',
    'Third-party aggregator. Discovery source only.'),
   ('TenderBulletins', 'https://www.tenderbulletin.co.za', 'AGGREGATOR', 'DISCOVERY', 'National',
-   'Third-party aggregator. Discovery source only.'),
+   'Third-party aggregator. Discovery source only.')
 
-  -- Category placeholders for the long tail of municipalities/SOEs
-  -- not yet individually onboarded — kept distinct from the named
-  -- rows above so the registry never implies full national coverage.
-  ('Municipal Sources (placeholder)', 'https://www.gov.za/local-government', 'MUNICIPAL', 'DISCOVERY', 'Provincial/Local',
-   'Placeholder representing the category of individual municipal procurement portals not yet onboarded by name.'),
-  ('State-Owned Entity Sources (placeholder)', 'https://www.gov.za/state-owned-entities', 'SOE', 'DISCOVERY', 'National',
-   'Placeholder representing the category of individual SOE procurement portals not yet onboarded by name.')
 on conflict (name) do nothing;
 
 -- Phase 5: a real adapter now exists for eTenders
