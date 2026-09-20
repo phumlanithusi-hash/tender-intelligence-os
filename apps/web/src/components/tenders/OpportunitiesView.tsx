@@ -11,7 +11,7 @@ import { LoadingState } from '../states/LoadingState.js'
 import { ErrorState } from '../states/ErrorState.js'
 import { Pagination } from './Pagination.js'
 import { DecisionSignalBadge } from './badges.js'
-import { useOpportunities, useScanOpportunities } from '../../hooks/useOpportunities.js'
+import { useOpportunities, useScanOpportunities, useExtractIntelligence } from '../../hooks/useOpportunities.js'
 
 const PAGE_SIZE = 25
 
@@ -42,6 +42,7 @@ export function OpportunitiesView() {
 
   const opportunities = useOpportunities({ decisionSignal }, { page, pageSize: PAGE_SIZE })
   const scan = useScanOpportunities()
+  const extract = useExtractIntelligence()
 
   const totalPages = opportunities.data?.total !== undefined ? Math.max(1, Math.ceil(opportunities.data.total / PAGE_SIZE)) : null
 
@@ -56,15 +57,51 @@ export function OpportunitiesView() {
         title="Opportunities"
         description="Currently active tenders scored by the opportunity scoring engine, highest scoring first."
         actions={
-          <Button size="sm" onClick={() => void scan.scan()} disabled={scan.isScanning}>
-            {scan.isScanning
-              ? scan.progress
-                ? `Scanning… ${scan.progress.scanned}/${scan.progress.total}`
-                : 'Scanning…'
-              : 'Scan active tenders'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void extract.extract()}
+              disabled={extract.isExtracting || scan.isScanning}
+            >
+              {extract.isExtracting
+                ? extract.progress
+                  ? `Extracting… ${extract.progress.tendersProcessed}/${extract.progress.total}`
+                  : 'Extracting…'
+                : 'Extract tender data'}
+            </Button>
+            <Button size="sm" onClick={() => void scan.scan()} disabled={scan.isScanning || extract.isExtracting}>
+              {scan.isScanning
+                ? scan.progress
+                  ? `Scanning… ${scan.progress.scanned}/${scan.progress.total}`
+                  : 'Scanning…'
+                : 'Scan active tenders'}
+            </Button>
+          </div>
         }
       />
+
+      <p className="mb-4 text-sm text-muted-foreground">
+        Extract tender data downloads and processes each active tender&apos;s documents, then runs AI requirement
+        extraction and qualification. Run it first — otherwise scoring has nothing to work with and every tender
+        will show Insufficient Data.
+      </p>
+
+      {extract.error ? (
+        <div className="mb-4">
+          <ErrorState message={extract.error} onRetry={() => void extract.extract()} />
+        </div>
+      ) : null}
+
+      {!extract.isExtracting && extract.progress ? (
+        <p className="mb-4 text-sm text-muted-foreground">
+          Last extraction: {extract.progress.tendersProcessed} of {extract.progress.total} active tenders processed —{' '}
+          {extract.progress.documentsProcessed} documents processed
+          {extract.progress.documentsFailed > 0 ? `, ${extract.progress.documentsFailed} document(s) failed` : ''}
+          {extract.progress.qualificationErrors > 0 ? `, ${extract.progress.qualificationErrors} qualification error(s)` : ''}
+          {!extract.progress.aiConfigured ? ' — AI requirement extraction was skipped (OPENAI_API_KEY is not configured on the server).' : ''}
+        </p>
+      ) : null}
 
       {scan.error ? (
         <div className="mb-4">

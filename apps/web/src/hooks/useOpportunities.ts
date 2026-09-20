@@ -106,3 +106,87 @@ export function useScanOpportunities() {
 
   return { scan, isScanning, progress, error }
 }
+
+interface ExtractDocumentOutcome {
+  documentId: string
+  filename: string
+  outcome: 'ALREADY_PROCESSED' | 'PROCESSED' | 'NO_ALLOWED_HOST' | 'FAILED'
+  error?: string
+}
+
+interface ExtractTenderResult {
+  tenderId: string
+  documents: ExtractDocumentOutcome[]
+  extraction: { status: string; requirementCount?: number; criterionCount?: number } | { skipped: string }
+  qualification: { overallStatus: string } | { skipped: string } | { error: string }
+}
+
+interface ExtractBatchResponse {
+  processed: number
+  total: number
+  nextOffset: number
+  hasMore: boolean
+  aiConfigured: boolean
+  results: ExtractTenderResult[]
+}
+
+export interface ExtractProgress {
+  tendersProcessed: number
+  total: number
+  documentsProcessed: number
+  documentsFailed: number
+  qualificationErrors: number
+  aiConfigured: boolean
+}
+
+/**
+ * Drives `POST /api/opportunities/extract` to completion — the
+ * backfill step that has to run BEFORE a scan can produce anything
+ * but INSUFFICIENT_DATA (2026-09-20 finding): it downloads/processes
+ * each active tender's documents, runs AI requirement/evaluation
+ * extraction, then deterministic qualification evaluation. Same
+ * batch-and-page loop as useScanOpportunities, smaller batches (the
+ * API enforces a max of 5 per call — see routes/opportunities.ts).
+ */
+export function useExtractIntelligence() {
+  const [isExtracting, setIsExtracting] = useState(false)
+  const [progress, setProgress] = useState<ExtractProgress | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const extract = useCallback(async () => {
+    setIsExtracting(true)
+    setError(null)
+    let offset = 0
+    let tendersProcessed = 0
+    let documentsProcessed = 0
+    let documentsFailed = 0
+    let qualificationErrors = 0
+    let total = 0
+    let aiConfigured = true
+    try {
+      for (;;) {
+        const batch = await apiFetch<ExtractBatchResponse>('/api/opportunities/extract', {
+          method: 'POST',
+          body: JSON.stringify({ offset, limit: 5 }),
+        })
+        total = batch.total
+        aiConfigured = batch.aiConfigured
+        tendersProcessed += batch.processed
+        for (const result of batch.results) {
+          documentsProcessed += result.documents.filter((d) => d.outcome === 'PROCESSED' || d.outcome === 'ALREADY_PROCESSED').length
+          documentsFailed += result.documents.filter((d) => d.outcome === 'FAILED').length
+          if ('error' in result.qualification) qualificationErrors += 1
+        }
+        setProgress({ tendersProcessed, total, documentsProcessed, documentsFailed, qualificationErrors, aiConfigured })
+        if (!batch.hasMore) break
+        offset = batch.nextOffset
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The extraction backfill could not finish.')
+    } finally {
+      setIsExtracting(false)
+    }
+  }, [])
+
+  return { extract, isExtracting, progress, error }
+}
