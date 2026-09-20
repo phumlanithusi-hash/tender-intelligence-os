@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { TenderRow, TenderSourceRecordRow, TenderSourceScanRow } from '@tender-os/schemas'
 import type { CreateTenderInput } from '../../../repositories/tenders.js'
 import type { IngestionStore } from '../store.js'
+import { deriveTenderStatus, isAutoDerivableStatus } from '../deriveTenderStatus.js'
 
 /**
  * Minimal in-memory `IngestionStore` for scanRunner unit tests — not
@@ -151,7 +152,7 @@ export function createFakeIngestionStore() {
         submission_url: null,
         submission_email: null,
         original_document_url: input.originalDocumentUrl,
-        status: 'DISCOVERED',
+        status: deriveTenderStatus(input.closingDate),
         confidence_score: null,
         discovered_at: nowIso(),
         verified_at: null,
@@ -169,6 +170,11 @@ export function createFakeIngestionStore() {
       if (current.published_date === null && candidate.publishedDate) update.published_date = candidate.publishedDate
       if (current.original_document_url === null && candidate.originalDocumentUrl) {
         update.original_document_url = candidate.originalDocumentUrl
+      }
+      if (isAutoDerivableStatus(current.status)) {
+        const effectiveClosingDate = update.closing_date ?? current.closing_date
+        const derivedStatus = deriveTenderStatus(effectiveClosingDate)
+        if (derivedStatus !== current.status) update.status = derivedStatus
       }
       if (Object.keys(update).length === 0) return current
       const updated = { ...current, ...update }

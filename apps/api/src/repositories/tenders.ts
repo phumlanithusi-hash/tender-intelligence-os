@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { tenderSchema, type TenderRow } from '@tender-os/schemas'
+import type { TenderStatus } from '@tender-os/constants'
 import { type ListQuery, type ListResult } from './pagination.js'
+import { deriveTenderStatus, isAutoDerivableStatus } from '../lib/ingestion/deriveTenderStatus.js'
 
 /**
  * A tender row as shown in the Tender Radar table (Phase 3 §7),
@@ -193,13 +195,20 @@ export async function getTenderById(supabase: SupabaseClient, id: string): Promi
 }
 
 /**
- * Canonical-tender write path (Phase 5 §10/§25). A brand-new tender
- * always starts life as `DISCOVERED` (Phase 5 §25) and with whatever
- * deterministic fields the source's listing/detail actually stated —
- * every field this adapter could not determine is left `null`,
+ * Canonical-tender write path (Phase 5 §10/§25, status derivation
+ * revised 2026-09-20 — see docs/DECISIONS.md). A brand-new tender's
+ * status is derived purely from its own closing date
+ * (lib/ingestion/deriveTenderStatus.ts) rather than always starting at
+ * `DISCOVERED`: nothing in this codebase ever promotes a tender past
+ * `DISCOVERED` on its own, which made `OPEN`/`CLOSING_SOON` — the
+ * statuses the Tender Radar KPIs, filters, and the Opportunity
+ * scoring scan all key on — unreachable in practice. Every other
+ * field this adapter could not determine is still left `null`,
  * matching the table's own "nullable is preferable to invented"
  * convention (Phase 2 §5) rather than the ingestion layer inventing a
- * substitute default.
+ * substitute default — status is the one exception, because it is
+ * fully determined by data already being written (closing_date), not
+ * invented.
  */
 export interface CreateTenderInput {
   tenderNumber: string | null
@@ -229,7 +238,7 @@ export async function createTender(supabase: SupabaseClient, input: CreateTender
     closing_time: input.closingTime,
     submission_method: input.submissionMethod,
     original_document_url: input.originalDocumentUrl,
-    status: 'DISCOVERED',
+    status: deriveTenderStatus(input.closingDate),
   }
   // `briefing_required` has a NOT NULL column default of `false`
   // (Phase 2 schema) — an unknown briefing status is represented by
@@ -276,6 +285,21 @@ export async function fillUnknownTenderFields(
   }
   if (candidate.briefingRequired !== undefined && candidate.briefingRequired !== null && !current.briefing_required) {
     update.briefing_required = candidate.briefingRequired
+  }
+
+  // Status re-derivation (2026-09-20 — see docs/DECISIONS.md): every
+  // re-scan of an already-known tender is also the natural, existing
+  // opportunity to keep its status honest as time passes — an OPEN
+  // tender whose deadline has since entered the CLOSING_SOON window,
+  // or passed entirely, is corrected here rather than needing a
+  // separate scheduled job this codebase has no infrastructure for.
+  // Never touches a status a human/future process set deliberately
+  // (CANCELLED/AWARDED/WITHDRAWN/UNKNOWN — see
+  // isAutoDerivableStatus).
+  if (isAutoDerivableStatus(current.status as TenderStatus)) {
+    const effectiveClosingDate = (update.closing_date as string | undefined) ?? current.closing_date
+    const derivedStatus = deriveTenderStatus(effectiveClosingDate)
+    if (derivedStatus !== current.status) update.status = derivedStatus
   }
 
   if (Object.keys(update).length === 0) return current // Nothing new — confirms the existing record without a write (Phase 5 §10).

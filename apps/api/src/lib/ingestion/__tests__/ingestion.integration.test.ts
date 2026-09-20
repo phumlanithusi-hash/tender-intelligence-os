@@ -8,6 +8,7 @@ import {
 } from '../../adapters/etenders/transport/fixtureTransport.js'
 import { runEtendersScan } from '../scanRunner.js'
 import { createPgIngestionStore } from './pgIngestionStore.js'
+import { deriveTenderStatus } from '../deriveTenderStatus.js'
 
 /**
  * Real-database integration coverage (Phase 5 §29): discovery →
@@ -82,13 +83,17 @@ describe('eTenders ingestion — full pipeline against a real Postgres schema (P
     expect(errorRows.rows.length).toBeGreaterThan(0)
     expect(errorRows.rows.some((r) => JSON.stringify(r.metadata).includes('ET-100004'))).toBe(true)
 
-    // Canonical tenders (Phase 5 §10/§25) — every one starts life as DISCOVERED.
+    // Canonical tenders (Phase 5 §10/§25; status derivation revised
+    // 2026-09-20, see docs/DECISIONS.md) — status is derived purely from
+    // each tender's own closing_date, never hardcoded, so this asserts
+    // the invariant rather than a fixed value that would go stale the
+    // moment the fixtures' hardcoded closing dates are in the past.
     const tenderRows = await pool.query(
       `select t.* from tenders t join tender_source_records tsr on tsr.tender_id = t.id where tsr.source_id = $1`,
       [sourceId],
     )
     expect(tenderRows.rows).toHaveLength(9)
-    expect(tenderRows.rows.every((r) => r.status === 'DISCOVERED')).toBe(true)
+    expect(tenderRows.rows.every((r) => r.status === deriveTenderStatus(r.closing_date))).toBe(true)
 
     // Source records preserve raw provenance (Phase 5 §6/§24).
     const sourceRecordRows = await pool.query(`select * from tender_source_records where source_id = $1`, [sourceId])

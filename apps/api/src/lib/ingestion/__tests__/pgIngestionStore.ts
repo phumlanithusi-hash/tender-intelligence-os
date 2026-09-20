@@ -2,6 +2,7 @@ import type pg from 'pg'
 import type { TenderRow, TenderSourceRecordRow, TenderSourceScanRow } from '@tender-os/schemas'
 import type { CreateTenderInput } from '../../../repositories/tenders.js'
 import type { IngestionStore } from '../store.js'
+import { deriveTenderStatus, isAutoDerivableStatus } from '../deriveTenderStatus.js'
 
 /**
  * Test-only `IngestionStore` backed directly by a real Postgres
@@ -166,7 +167,7 @@ export function createPgIngestionStore(pool: pg.Pool): IngestionStore {
            (tender_number, title, organisation, province, category, description,
             published_date, closing_date, closing_time, submission_method,
             original_document_url, status, briefing_required)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'DISCOVERED', coalesce($12, false))
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, coalesce($13, false))
          returning *`,
         [
           input.tenderNumber,
@@ -180,6 +181,7 @@ export function createPgIngestionStore(pool: pg.Pool): IngestionStore {
           input.closingTime,
           input.submissionMethod,
           input.originalDocumentUrl,
+          deriveTenderStatus(input.closingDate),
           input.briefingRequired,
         ],
       )
@@ -194,6 +196,11 @@ export function createPgIngestionStore(pool: pg.Pool): IngestionStore {
       if (current.published_date === null && candidate.publishedDate) update.published_date = candidate.publishedDate
       if (current.original_document_url === null && candidate.originalDocumentUrl) {
         update.original_document_url = candidate.originalDocumentUrl
+      }
+      if (isAutoDerivableStatus(current.status)) {
+        const effectiveClosingDate = (update.closing_date as string | undefined) ?? current.closing_date
+        const derivedStatus = deriveTenderStatus(effectiveClosingDate)
+        if (derivedStatus !== current.status) update.status = derivedStatus
       }
       if (Object.keys(update).length === 0) return current
 

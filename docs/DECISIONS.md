@@ -523,3 +523,43 @@ application. No business rule changed: this only displays a field the API alread
    existing visibility rule exactly (`docs/SECURITY.md` §9) — a full cross-entity chain-of-custody view is at
    least as sensitive as the single-entity audit log it reads alongside, so it gets the same restriction, not
    a looser one.
+
+## 2026-09-20 — Tender status lifecycle gap (user-confirmed fix)
+
+1. **Every canonical tender created since Phase 5 has been permanently stuck at `DISCOVERED`.** No code
+   path anywhere in this codebase — across every phase built since — ever promoted a tender through
+   `VERIFYING`/`VERIFIED` to `OPEN`/`CLOSING_SOON`. This was silent because nothing failed loudly: the
+   Tender Radar's own KPI strip (open tenders, closing soon, briefings required — `repositories/
+   tenderSummary.ts`), the status filter on the Tender Radar table, and the Phase 10 Opportunities scan
+   (`repositories/opportunities.ts`, added the same day this gap was found) all key on `OPEN`/
+   `CLOSING_SOON` and simply reported zero, which reads as "no data yet" rather than "broken filter."
+   Discovered while wiring up the Opportunities page, when a scan against a database with over a thousand
+   real, successfully-ingested tenders reported `0 of 0 active tenders`.
+2. **No dedicated "tender verification" phase was ever specified or built** (checked `docs/BUILD-PLAN.md`
+   in full) — `VERIFYING`/`VERIFIED` are lifecycle states that exist in the `tender_status` enum
+   (`docs/DATABASE.md`) with no owning feature. Waiting for a verification step that doesn't exist was
+   therefore not an option.
+3. **User-confirmed resolution: auto-promote a tender's status purely from its own `closing_date`**, via a
+   new pure function (`apps/api/src/lib/ingestion/deriveTenderStatus.ts`): no `closing_date` → `OPEN`
+   (benefit of the doubt, matching the existing timezone-ambiguity convention in `lib/scoring/gates.ts`);
+   closing date already past → `CLOSED`; within a 7-day window → `CLOSING_SOON` (the same window
+   `tenderSummary.ts`'s own "closing soon" KPI query already uses, kept consistent rather than inventing a
+   second threshold); otherwise → `OPEN`. This is applied at tender creation (`repositories/tenders.ts`'s
+   `createTender`, replacing the old hardcoded `'DISCOVERED'`) and re-applied on every subsequent re-scan of
+   an already-known tender (`fillUnknownTenderFields`), so a tender's status stays honest as its deadline
+   approaches or passes without needing a scheduled job this codebase has no infrastructure for.
+4. **Never overwrites a status a human or a future dedicated process set deliberately** —
+   `CANCELLED`/`AWARDED`/`WITHDRAWN`/`UNKNOWN` are excluded from auto-derivation
+   (`isAutoDerivableStatus`) and are left untouched by both call sites above.
+5. **Existing already-ingested tenders were backfilled with the identical formula via a one-off SQL
+   statement** run directly in the Supabase SQL Editor (not the seed/migration path, since this is a
+   one-time data correction, not schema or reference data) — see the operator's own record of that
+   statement. Every future tender reaches the correct status without any further manual step.
+6. **Test doubles updated for parity, not just production code**: both `__tests__/pgIngestionStore.ts` (the
+   real-Postgres-backed `IngestionStore` used by the Phase 5 integration test) and
+   `__tests__/fakeIngestionStore.ts` (the in-memory double used by scanRunner unit tests) now apply the same
+   `deriveTenderStatus`/`isAutoDerivableStatus` logic, so they exercise the real contract rather than a
+   stale hardcoded `'DISCOVERED'`. `ingestion.integration.test.ts`'s assertion was changed from a fixed
+   `'DISCOVERED'` expectation to `r.status === deriveTenderStatus(r.closing_date)` — the fixtures' closing
+   dates are hardcoded calendar dates, so a fixed-status assertion would have silently gone stale the moment
+   real time passed those dates.
