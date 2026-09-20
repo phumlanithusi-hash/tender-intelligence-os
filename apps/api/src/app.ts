@@ -14,6 +14,7 @@ import { tenderAiRoutes } from './routes/tenderAi.js'
 import { tenderQualificationRoutes } from './routes/tenderQualification.js'
 import { tenderRequirementsEvaluationRoutes } from './routes/tenderRequirementsEvaluation.js'
 import { tenderScoringRoutes } from './routes/tenderScoring.js'
+import { opportunitiesRoutes } from './routes/opportunities.js'
 import { tenderBidDecisionRoutes } from './routes/tenderBidDecision.js'
 import { bidStrategyRoutes } from './routes/bidStrategy.js'
 import { evidenceMatchingRoutes } from './routes/evidenceMatching.js'
@@ -79,6 +80,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(tenderQualificationRoutes)
   await app.register(tenderRequirementsEvaluationRoutes)
   await app.register(tenderScoringRoutes)
+  await app.register(opportunitiesRoutes)
   await app.register(tenderBidDecisionRoutes)
   await app.register(bidStrategyRoutes)
   await app.register(evidenceMatchingRoutes)
