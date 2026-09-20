@@ -1,6 +1,7 @@
 import { PlaceholderPage } from './PlaceholderPage.js'
 import { TenderRadar } from '../components/tenders/TenderRadar.js'
 import { TenderDetail as TenderDetailView } from '../components/tenders/TenderDetail.js'
+import { WatchlistView } from '../components/tenders/WatchlistView.js'
 
 export function TendersList() {
   return <TenderRadar />
@@ -21,11 +22,5 @@ export function Opportunities() {
 }
 
 export function Watchlist() {
-  return (
-    <PlaceholderPage
-      title="Watchlist"
-      description="Tenders your agency is tracking without yet committing to a bid decision."
-      builtInPhase="Phase 3 (Tender Dashboard)"
-    />
-  )
+  return <WatchlistView />
 }
