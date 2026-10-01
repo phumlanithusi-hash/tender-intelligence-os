@@ -1,0 +1,135 @@
+name: Scheduled source scans
+
+# Nothing in this application auto-updates on its own (confirmed
+# 2026-10-01: no BullMQ/Redis, no Render cron job, no background
+# worker anywhere in the codebase — see docs/INTEGRATION-STATUS.md's
+# "Polling scheduler ... CONFIGURED, not ACTIVE" entry and
+# lib/surveillance/schedule.ts's doc comment). Every scan has only
+# ever run when a human manually executed `pnpm --filter api
+# <adapter>:scan` on their own machine. This workflow is that missing
+# scheduler: GitHub's runners have normal, unrestricted outbound
+# network access (unlike this project's sandboxed dev environments),
+# so it can reach the real government/SOE/aggregator sites directly
+# and write straight to Supabase with the same scripts a human would
+# run by hand.
+#
+# Each adapter runs as its own step with `continue-on-error: true` —
+# one source being down (e.g. a site outage) must never block the
+# other seven from updating. The job summary at the end reports which
+# steps actually failed so a real outage is still visible, not
+# swallowed.
+on:
+  schedule:
+    # Every 6 hours. Adjust to taste — there is no cost to running
+    # this more or less often beyond GitHub Actions minutes (this repo
+    # is almost certainly under the free-tier allowance for a job this
+    # short, run 4x/day).
+    - cron: '0 */6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: eTenders scan
+        id: etenders
+        continue-on-error: true
+        working-directory: apps/api
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm etenders:scan
+
+      - name: easyTenders scan
+        id: easytenders
+        continue-on-error: true
+        working-directory: apps/api
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm easytenders:scan
+
+      - name: Tender Bulletins scan
+        id: tenderbulletins
+        continue-on-error: true
+        working-directory: apps/api
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm tenderbulletins:scan
+
+      - name: City of Joburg scan
+        id: joburg
+        continue-on-error: true
+        working-directory: apps/api
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm joburg:scan
+
+      - name: Eskom scan
+        id: eskom
+        continue-on-error: true
+        working-directory: apps/api
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm eskom:scan
+
+      - name: City of Cape Town scan
+        id: capetown
+        continue-on-error: true
+        working-directory: apps/api
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm capetown:scan
+
+      - name: Transnet scan
+        id: transnet
+        continue-on-error: true
+        working-directory: apps/api
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm transnet:scan
+
+      - name: TenderAlerts scan
+        id: tenderalerts
+        continue-on-error: true
+        working-directory: apps/api
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm tenderalerts:scan
+
+      - name: Summarise results
+        if: always()
+        run: |
+          echo "## Scheduled scan results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Source | Outcome |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| eTenders | ${{ steps.etenders.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| easyTenders | ${{ steps.easytenders.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tender Bulletins | ${{ steps.tenderbulletins.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| City of Joburg | ${{ steps.joburg.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Eskom | ${{ steps.eskom.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| City of Cape Town | ${{ steps.capetown.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Transnet | ${{ steps.transnet.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| TenderAlerts | ${{ steps.tenderalerts.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
