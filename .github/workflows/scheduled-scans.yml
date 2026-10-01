@@ -27,6 +27,12 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch: {}
 
+# Never let two scan batches overlap (e.g. a manual dispatch landing
+# while the scheduled run is still going).
+concurrency:
+  group: scheduled-scans
+  cancel-in-progress: false
+
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -45,6 +51,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Every adapter scrapes through playwright-core, which ships no
+      # browser of its own — without this, every scan fails at
+      # chromium.launch().
+      - name: Install Chromium
+        working-directory: apps/api
+        run: pnpm exec playwright-core install --with-deps chromium
 
       - name: eTenders scan
         id: etenders
@@ -118,6 +131,18 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: pnpm tenderalerts:scan
 
+      # Sources usually drop a tender from their listing once it closes,
+      # so re-scans alone never mark it CLOSED. This sweep re-derives
+      # every tender's status from its closing date.
+      - name: Refresh tender statuses
+        id: refreshstatus
+        continue-on-error: true
+        working-directory: apps/api
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm tenders:refresh-status
+
       - name: Summarise results
         if: always()
         run: |
@@ -133,3 +158,4 @@ jobs:
           echo "| City of Cape Town | ${{ steps.capetown.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Transnet | ${{ steps.transnet.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| TenderAlerts | ${{ steps.tenderalerts.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Status refresh | ${{ steps.refreshstatus.outcome }} |" >> "$GITHUB_STEP_SUMMARY"

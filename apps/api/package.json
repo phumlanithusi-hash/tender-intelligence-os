@@ -26,6 +26,7 @@
     "transnet:smoke": "tsx src/scripts/transnetSmoke.ts",
     "tenderalerts:scan": "tsx src/scripts/tenderalertsScan.ts",
     "tenderalerts:smoke": "tsx src/scripts/tenderalertsSmoke.ts",
+    "tenders:refresh-status": "tsx src/scripts/refreshTenderStatuses.ts",
     "easytenders:inspect": "tsx src/scripts/easytendersInspect.ts",
     "easytenders:inspect-detail": "tsx src/scripts/easytendersInspectDetail.ts",
     "tenderbulletins:inspect": "tsx src/scripts/tenderbulletinsInspect.ts",
