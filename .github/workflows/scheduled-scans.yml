@@ -13,11 +13,10 @@ name: Scheduled source scans
 # and write straight to Supabase with the same scripts a human would
 # run by hand.
 #
-# Each adapter runs as its own step with `continue-on-error: true` —
-# one source being down (e.g. a site outage) must never block the
-# other seven from updating. The job summary at the end reports which
-# steps actually failed so a real outage is still visible, not
-# swallowed.
+# Each adapter runs as its own parallel matrix job — one source being
+# down (e.g. a site outage) or slow must never block the other seven
+# from updating. The run page lists each source's job with its own
+# pass/fail, so a real outage is still visible, not swallowed.
 on:
   schedule:
     # Every 6 hours. Adjust to taste — there is no cost to running
@@ -34,9 +33,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # One parallel job per source, each with its own time budget — a
+  # slow source (easyTenders and Eskom each take 10-15 minutes) can no
+  # longer starve the others out of a shared job timeout, and one
+  # source failing never blocks the rest (fail-fast: false).
   scan:
+    name: Scan ${{ matrix.name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: eTenders, script: etenders:scan }
+          - { name: easyTenders, script: easytenders:scan }
+          - { name: Tender Bulletins, script: tenderbulletins:scan }
+          - { name: City of Joburg, script: joburg:scan }
+          - { name: Eskom, script: eskom:scan }
+          - { name: City of Cape Town, script: capetown:scan }
+          - { name: Transnet, script: transnet:scan }
+          - { name: TenderAlerts, script: tenderalerts:scan }
     steps:
       - uses: actions/checkout@v4
 
@@ -59,103 +75,41 @@ jobs:
         working-directory: apps/api
         run: pnpm exec playwright-core install --with-deps chromium
 
-      - name: eTenders scan
-        id: etenders
-        continue-on-error: true
+      - name: Scan
         working-directory: apps/api
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: pnpm etenders:scan
+        run: pnpm ${{ matrix.script }}
 
-      - name: easyTenders scan
-        id: easytenders
-        continue-on-error: true
-        working-directory: apps/api
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: pnpm easytenders:scan
+  # Sources usually drop a tender from their listing once it closes,
+  # so re-scans alone never mark it CLOSED. This sweep re-derives
+  # every tender's status from its closing date — after all scans,
+  # whether or not each one succeeded.
+  refresh-status:
+    name: Refresh tender statuses
+    needs: scan
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Tender Bulletins scan
-        id: tenderbulletins
-        continue-on-error: true
-        working-directory: apps/api
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: pnpm tenderbulletins:scan
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
-      - name: City of Joburg scan
-        id: joburg
-        continue-on-error: true
-        working-directory: apps/api
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: pnpm joburg:scan
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
 
-      - name: Eskom scan
-        id: eskom
-        continue-on-error: true
-        working-directory: apps/api
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: pnpm eskom:scan
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: City of Cape Town scan
-        id: capetown
-        continue-on-error: true
-        working-directory: apps/api
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: pnpm capetown:scan
-
-      - name: Transnet scan
-        id: transnet
-        continue-on-error: true
-        working-directory: apps/api
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: pnpm transnet:scan
-
-      - name: TenderAlerts scan
-        id: tenderalerts
-        continue-on-error: true
-        working-directory: apps/api
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: pnpm tenderalerts:scan
-
-      # Sources usually drop a tender from their listing once it closes,
-      # so re-scans alone never mark it CLOSED. This sweep re-derives
-      # every tender's status from its closing date.
-      - name: Refresh tender statuses
-        id: refreshstatus
-        continue-on-error: true
+      - name: Refresh statuses
         working-directory: apps/api
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: pnpm tenders:refresh-status
-
-      - name: Summarise results
-        if: always()
-        run: |
-          echo "## Scheduled scan results" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Source | Outcome |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| eTenders | ${{ steps.etenders.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| easyTenders | ${{ steps.easytenders.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Tender Bulletins | ${{ steps.tenderbulletins.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| City of Joburg | ${{ steps.joburg.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Eskom | ${{ steps.eskom.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| City of Cape Town | ${{ steps.capetown.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Transnet | ${{ steps.transnet.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| TenderAlerts | ${{ steps.tenderalerts.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Status refresh | ${{ steps.refreshstatus.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
