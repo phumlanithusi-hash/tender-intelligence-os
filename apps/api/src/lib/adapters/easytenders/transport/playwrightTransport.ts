@@ -58,17 +58,39 @@ export function resolveAndAllowlist(url: string, baseUrl: string): string {
   return absolute
 }
 
+// One Chromium per process, shared across every request: a scan
+// fetches one detail page per tender (~500 of them), and launching a
+// fresh browser for each added seconds per tender — enough to push the
+// scheduled scan past its job timeout. Each request still gets its own
+// page, closed afterwards. The browser is torn down when the scan
+// script exits.
+let sharedBrowser: Promise<Browser> | undefined
+
+async function getBrowser(config: PlaywrightTransportConfig): Promise<Browser> {
+  if (!sharedBrowser) {
+    const { chromium } = await import('playwright-core')
+    sharedBrowser = chromium.launch({ executablePath: config.executablePath, headless: true })
+    sharedBrowser.catch(() => {
+      sharedBrowser = undefined // Let the next request retry the launch.
+    })
+  }
+  const browser = await sharedBrowser
+  if (!browser.isConnected()) {
+    sharedBrowser = undefined
+    return getBrowser(config)
+  }
+  return browser
+}
+
 async function withBrowser<T>(config: PlaywrightTransportConfig, fn: (page: Page) => Promise<T>): Promise<T> {
-  const { chromium } = await import('playwright-core')
-  let browser: Browser | undefined
+  const browser = await getBrowser(config)
+  const page = await browser.newPage()
   try {
-    browser = await chromium.launch({ executablePath: config.executablePath, headless: true })
-    const page = await browser.newPage()
     page.setDefaultNavigationTimeout(config.navigationTimeoutMs)
     page.setDefaultTimeout(config.navigationTimeoutMs)
     return await fn(page)
   } finally {
-    await browser?.close().catch(() => undefined)
+    await page.close().catch(() => undefined)
   }
 }
 

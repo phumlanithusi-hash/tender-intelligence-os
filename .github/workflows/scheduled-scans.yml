@@ -40,13 +40,15 @@ jobs:
   scan:
     name: Scan ${{ matrix.name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # easyTenders fetches a detail page per tender (~500), so it gets a
+    # longer budget than the listing-only sources.
+    timeout-minutes: ${{ matrix.timeout || 45 }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - { name: eTenders, script: etenders:scan }
-          - { name: easyTenders, script: easytenders:scan }
+          - { name: easyTenders, script: easytenders:scan, timeout: 90 }
           - { name: Tender Bulletins, script: tenderbulletins:scan }
           - { name: City of Joburg, script: joburg:scan }
           - { name: Eskom, script: eskom:scan }

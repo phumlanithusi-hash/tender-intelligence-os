@@ -14,6 +14,7 @@ import { countConsecutiveFailedScans } from '../repositories/tenderSourceScans.j
 import { computeSourceHealth } from '../lib/sourceHealth.js'
 import { createSupabaseIngestionStore } from '../lib/ingestion/supabaseIngestionStore.js'
 import { runEtendersScan } from '../lib/ingestion/scanRunner.js'
+import { DEFAULT_ETENDERS_RATE_LIMIT } from '../lib/adapters/etenders/rateLimit.js'
 import { TENDERALERTS_ADAPTER_KEY } from '../lib/adapters/tenderalerts/adapter.js'
 
 async function main(): Promise<number> {
@@ -40,7 +41,16 @@ async function main(): Promise<number> {
   const executionId = `manual-${new Date().toISOString()}`
 
   logger.info({ sourceId: source.id, executionId }, 'starting manual TenderAlerts scan')
-  const result = await runEtendersScan(store, adapter, { sourceId: source.id, executionId })
+  // No per-item delay: this adapter is discovery-only, so processing an
+  // item never touches tenderalerts.co.za (fetchDetails/fetchDocuments
+  // read from memory) — the listing pages are already throttled inside
+  // discover(). The default 1.5s per item added ~35 minutes of pure
+  // sleep across ~1,400 tenders and timed the scheduled scan out.
+  const result = await runEtendersScan(store, adapter, {
+    sourceId: source.id,
+    executionId,
+    rateLimit: { ...DEFAULT_ETENDERS_RATE_LIMIT, delayMs: 0 },
+  })
 
   const checkedAt = new Date().toISOString()
   const consecutiveFailedScans = await countConsecutiveFailedScans(admin, source.id)
