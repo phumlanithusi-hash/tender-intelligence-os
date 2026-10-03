@@ -49,7 +49,10 @@ export interface PlaywrightTransportConfig {
 export const DEFAULT_PLAYWRIGHT_TRANSPORT_CONFIG: PlaywrightTransportConfig = {
   baseUrl: 'https://www.etenders.gov.za',
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
-  navigationTimeoutMs: 20_000,
+  // etenders.gov.za takes ~30s to send its first byte on a cold request
+  // (measured 2026-10-03: 31s cold, then ~1s for every request after),
+  // so a 20s budget failed every scheduled scan before the server woke.
+  navigationTimeoutMs: 60_000,
 }
 
 /** Resolves a possibly-relative source URL against the configured base and enforces the document/page domain allow-list before any navigation or fetch (Phase 5 §31/§32) — throws rather than silently skipping, since a resolution failure here means the caller must not proceed to fetch anything. */
